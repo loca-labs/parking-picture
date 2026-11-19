@@ -1,0 +1,40 @@
+{
+  "configVersion": 0,
+  "apple": {
+    "copyright": "2026 Loca Labs",
+    "categories": ["UTILITIES", "NAVIGATION"],
+    "advisory": {
+      "alcoholTobaccoOrDrugUseOrReferences": "NONE",
+      "contests": "NONE",
+      "gamblingSimulated": "NONE",
+      "horrorOrFearThemes": "NONE",
+      "matureOrSuggestiveThemes": "NONE",
+      "medicalOrTreatmentInformation": "NONE",
+      "profanityOrCrudeHumor": "NONE",
+      "sexualContentGraphicAndNudity": "NONE",
+      "sexualContentOrNudity": "NONE",
+      "violenceCartoonOrFantasy": "NONE",
+      "violenceRealistic": "NONE",
+      "violenceRealisticProlongedGraphicOrSadistic": "NONE",
+      "gambling": false,
+      "unrestrictedWebAccess": false,
+      "kidsAgeBand": null,
+      "ageRatingOverride": "NONE",
+      "koreaAgeRatingOverride": "NONE"
+    },
+    "info": {
+      "en-US": {
+        "title": "Parking Picture",
+        "subtitle": "Remember where you parked",
+        "description": "Never wander a parking garage again.\n\nParking Picture opens straight to the camera. Snap one photo of your parking spot — the floor number, a pillar, a sign — and it's saved instantly. When you come back, the photo is waiting on the same screen, with the time you took it.\n\n• One tap to capture: the camera is live as soon as the app opens.\n• Your last spot is always one glance away.\n• Pinch or double-tap to zoom in on details like level numbers and row signs.\n• Each new photo replaces the previous one, so there is nothing to manage or clean up.\n• Private by design: the photo stays on your device. No account, no tracking, no internet connection required.",
+        "keywords": ["parking", "car", "parked", "find my car", "parking spot", "garage", "photo", "reminder", "where"],
+        "promoText": "Snap your parking spot in one tap and find your car fast.",
+        "privacyPolicyUrl": "https://github.com/loca-labs/parking-picture/blob/main/docs/privacy-policy.html",
+        "supportUrl": "https://github.com/loca-labs/parking-picture/blob/main/docs/support.html"
+      }
+    },
+    "release": {
+      "automaticRelease": false
+    }
+  }
+}

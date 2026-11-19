@@ -1,0 +1,173 @@
+diff --git a/node_modules/expo-widgets/android/src/main/java/expo/modules/widgets/ExpoWidgetsPeekWidget.kt b/node_modules/expo-widgets/android/src/main/java/expo/modules/widgets/ExpoWidgetsPeekWidget.kt
+index edabde8..0976662 100644
+--- a/node_modules/expo-widgets/android/src/main/java/expo/modules/widgets/ExpoWidgetsPeekWidget.kt
++++ b/node_modules/expo-widgets/android/src/main/java/expo/modules/widgets/ExpoWidgetsPeekWidget.kt
+@@ -2,10 +2,17 @@
+ package expo.modules.widgets
+ 
+ import android.annotation.SuppressLint
++import android.app.AlarmManager
++import android.app.PendingIntent
++import android.appwidget.AppWidgetManager
+ import android.content.Context
++import android.content.Intent
+ import android.os.Bundle
++import android.os.SystemClock
+ import androidx.compose.ui.unit.DpSize
+ import androidx.glance.Emittable
++import androidx.glance.action.clickable
++import androidx.glance.appwidget.action.actionStartActivity
+ import androidx.glance.appwidget.AppWidgetId
+ import androidx.glance.appwidget.SizeMode
+ import io.github.expo.peek.emittables.PeekEmittableAppWidget
+@@ -25,9 +32,58 @@ internal class ExpoWidgetsPeekWidget(
+     val layout = WidgetsLayoutRegistry.layout(appContext, widgetName)
+       ?: return createErrorRoot("No layout found for $widgetName")
+     val props = WidgetsLayoutRegistry.props(appContext, widgetName)
+-    val environment = getWidgetEnvironment(appContext)
++    // Expose the widget's current size (dp) so layouts can fill it exactly.
++    val width = size.width.value
++    val height = size.height.value
++    val environment = getWidgetEnvironment(appContext) +
++      if (width.isFinite() && height.isFinite() && width > 0f && height > 0f) {
++        mapOf("widgetSize" to mapOf("width" to width.toDouble(), "height" to height.toDouble()))
++      } else {
++        emptyMap()
++      }
+     val node = evaluateLayout(appContext, layout, props, environment)
+ 
+-    return node.toPeekRoot(appContext, InteractionSource.Widget(widgetName), size)
++    val root = node.toPeekRoot(appContext, InteractionSource.Widget(widgetName), size)
++
++    // Opt-in periodic re-render (e.g. for relative times): props.refreshIntervalMs,
++    // aligned to props.refreshAnchorMs when given.
++    (props?.get("refreshIntervalMs") as? Number)?.toLong()?.takeIf { it >= 1000 }?.let { interval ->
++      val anchor = (props?.get("refreshAnchorMs") as? Number)?.toLong()
++      scheduleRefresh(appContext, interval, anchor)
++    }
++
++    // Tapping the widget opens the app (like the default widget tap on iOS).
++    // Buttons inside the widget keep their own click actions.
++    val launchIntent = appContext.packageManager.getLaunchIntentForPackage(appContext.packageName)
++      ?: return root
++    root.modifier = root.modifier.clickable(actionStartActivity(launchIntent))
++    return root
++  }
++
++  // Non-wakeup alarm: while the screen is off it is deferred, so it costs nothing until the
++  // user can see the widget again. Removing the widget ends the chain (no more renders).
++  private fun scheduleRefresh(context: Context, intervalMs: Long, anchorMs: Long?) {
++    val component = widgetProviderComponentName(context, widgetName)
++    val ids = AppWidgetManager.getInstance(context).getAppWidgetIds(component)
++    if (ids.isEmpty()) return
++    val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
++      .setComponent(component)
++      .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
++    val pendingIntent = PendingIntent.getBroadcast(
++      context,
++      widgetName.hashCode(),
++      intent,
++      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
++    )
++    val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return
++    // Fire just after the next boundary (anchor + k * interval) so labels have already changed.
++    val now = System.currentTimeMillis()
++    val delay = if (anchorMs != null) {
++      val elapsed = now - anchorMs
++      Math.floorMod(-elapsed, intervalMs).let { if (it == 0L) intervalMs else it } + 1000
++    } else {
++      intervalMs
++    }
++    alarmManager.set(AlarmManager.ELAPSED_REALTIME, SystemClock.elapsedRealtime() + delay, pendingIntent)
+   }
+ }
+diff --git a/node_modules/expo-widgets/ios/Widgets/TimelineProvider.swift b/node_modules/expo-widgets/ios/Widgets/TimelineProvider.swift
+index f339d98..6536438 100644
+--- a/node_modules/expo-widgets/ios/Widgets/TimelineProvider.swift
++++ b/node_modules/expo-widgets/ios/Widgets/TimelineProvider.swift
+@@ -31,10 +31,42 @@ public struct WidgetsTimelineProvider: TimelineProvider {
+ 
+     let entries = parseTimeline(identifier: groupIdentifier, name: name, family: context.family)
+ 
++    // Opt-in periodic re-render (e.g. for relative times): props.refreshIntervalMs, aligned to
++    // props.refreshAnchorMs. Generated here, one hour at a time, instead of the app storing a long
++    // timeline: WidgetKit renders entries ahead of time, and hundreds of them overload the extension.
++    if let periodic = periodicEntries(from: entries) {
++      completion(Timeline<WidgetsTimelineEntry>(entries: periodic, policy: .atEnd))
++      return
++    }
++
+     let timeline = Timeline<WidgetsTimelineEntry>(entries: entries, policy: .atEnd)
+     completion(timeline)
+   }
+ 
++  private func periodicEntries(from entries: [WidgetsTimelineEntry]) -> [WidgetsTimelineEntry]? {
++    let now = Date()
++    guard let base = entries.last(where: { $0.date <= now }) ?? entries.first,
++          let intervalMs = (base.props?["refreshIntervalMs"] as? NSNumber)?.doubleValue,
++          intervalMs >= 1000 else {
++      return nil
++    }
++    let interval = intervalMs / 1000
++    let anchor = ((base.props?["refreshAnchorMs"] as? NSNumber)?.doubleValue)
++      .map { Date(timeIntervalSince1970: $0 / 1000) } ?? now
++    // Land just after each boundary so labels computed from the entry date have already changed.
++    let margin: TimeInterval = 1
++    let count = max(1, min(60, Int(3600 / interval)))
++
++    var result = [WidgetsTimelineEntry(date: now, name: name, props: base.props, entryIndex: base.entryIndex)]
++    var step = (now.timeIntervalSince(anchor) / interval).rounded(.down) + 1
++    for _ in 0..<count {
++      let date = anchor.addingTimeInterval(step * interval + margin)
++      result.append(WidgetsTimelineEntry(date: date, name: name, props: base.props, entryIndex: base.entryIndex))
++      step += 1
++    }
++    return result
++  }
++
+   public typealias Entry = WidgetsTimelineEntry
+ 
+   let name: String
+diff --git a/node_modules/expo-widgets/scripts/build-layout-registry.mjs b/node_modules/expo-widgets/scripts/build-layout-registry.mjs
+index d5fc1c8..9dcec5d 100644
+--- a/node_modules/expo-widgets/scripts/build-layout-registry.mjs
++++ b/node_modules/expo-widgets/scripts/build-layout-registry.mjs
+@@ -19,7 +19,12 @@ const registryEntryPath = path.join(__dirname, '../bundle/layout-registry-entry.
+ const registryMetroConfigPath = path.join(__dirname, '../layout-registry.metro.config.js');
+ 
+ async function main() {
+-  const projectRoot = path.resolve(possibleProjectRoot);
++  let projectRoot = path.resolve(possibleProjectRoot);
++  try {
++    projectRoot = fs.realpathSync.native(projectRoot);
++  } catch {
++    // Keep the unresolved path when the directory does not exist yet.
++  }
+   const outputPath = path.resolve(projectRoot, registryOutput ?? defaultOutputPath);
+   const defaultConfigPath =
+     platform === 'android'
+@@ -58,6 +63,15 @@ async function main() {
+   await writeRegistry(outputPath, registry);
+ }
+ 
++function resolveInitialLayoutFile(projectRoot, initialLayout) {
++  const resolved = path.resolve(projectRoot, initialLayout);
++  try {
++    return fs.realpathSync.native(resolved);
++  } catch {
++    return resolved;
++  }
++}
++
+ async function readExpectedWidgets(projectRoot, configPath) {
+   if (!fs.existsSync(configPath)) {
+     return [];
+@@ -70,7 +84,7 @@ async function readExpectedWidgets(projectRoot, configPath) {
+     .map((widget) => ({
+       name: widget.name,
+       initialLayout: widget.initialLayout,
+-      initialLayoutFile: path.resolve(projectRoot, widget.initialLayout),
++      initialLayoutFile: resolveInitialLayoutFile(projectRoot, widget.initialLayout),
+     }));
+ }
+ 

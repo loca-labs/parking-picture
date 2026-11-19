@@ -1,0 +1,26 @@
+name: Build and Submit Production
+
+jobs:
+  build_android:
+    type: build
+    params:
+      platform: android
+      profile: production
+  build_ios:
+    type: build
+    params:
+      platform: ios
+      profile: production
+
+  submit_android:
+    type: submit # Uploads to Google Play using the track/releaseStatus from eas.json
+    needs: [build_android]
+    params:
+      build_id: ${{ needs.build_android.outputs.build_id }}
+      profile: production
+  submit_ios:
+    type: submit # Uploads to App Store Connect, then the build shows up in TestFlight
+    needs: [build_ios]
+    params:
+      build_id: ${{ needs.build_ios.outputs.build_id }}
+      profile: production
