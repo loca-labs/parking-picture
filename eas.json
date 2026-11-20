@@ -32,7 +32,8 @@
         "releaseStatus": "draft"
       },
       "ios": {
-        "appleTeamId": "S39WZ5NLK8"
+        "appleTeamId": "S39WZ5NLK8",
+        "ascAppId": "6837231205"
       }
     }
   }

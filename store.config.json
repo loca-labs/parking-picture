@@ -1,36 +1,31 @@
 {
   "configVersion": 0,
   "apple": {
+    "version": "1.0.0",
     "copyright": "2026 Loca Labs",
     "categories": ["UTILITIES", "NAVIGATION"],
-    "advisory": {
-      "alcoholTobaccoOrDrugUseOrReferences": "NONE",
-      "contests": "NONE",
-      "gamblingSimulated": "NONE",
-      "horrorOrFearThemes": "NONE",
-      "matureOrSuggestiveThemes": "NONE",
-      "medicalOrTreatmentInformation": "NONE",
-      "profanityOrCrudeHumor": "NONE",
-      "sexualContentGraphicAndNudity": "NONE",
-      "sexualContentOrNudity": "NONE",
-      "violenceCartoonOrFantasy": "NONE",
-      "violenceRealistic": "NONE",
-      "violenceRealisticProlongedGraphicOrSadistic": "NONE",
-      "gambling": false,
-      "unrestrictedWebAccess": false,
-      "kidsAgeBand": null,
-      "ageRatingOverride": "NONE",
-      "koreaAgeRatingOverride": "NONE"
-    },
     "info": {
       "en-US": {
         "title": "Parking Picture",
         "subtitle": "Remember where you parked",
-        "description": "Never wander a parking garage again.\n\nParking Picture opens straight to the camera. Snap one photo of your parking spot — the floor number, a pillar, a sign — and it's saved instantly. When you come back, the photo is waiting on the same screen, with the time you took it.\n\n• One tap to capture: the camera is live as soon as the app opens.\n• Your last spot is always one glance away.\n• Pinch or double-tap to zoom in on details like level numbers and row signs.\n• Each new photo replaces the previous one, so there is nothing to manage or clean up.\n• Private by design: the photo stays on your device. No account, no tracking, no internet connection required.",
-        "keywords": ["parking", "car", "parked", "find my car", "parking spot", "garage", "photo", "reminder", "where"],
-        "promoText": "Snap your parking spot in one tap and find your car fast.",
-        "privacyPolicyUrl": "https://github.com/loca-labs/parking-picture/blob/main/docs/privacy-policy.html",
-        "supportUrl": "https://github.com/loca-labs/parking-picture/blob/main/docs/support.html"
+        "description": "Never wander a parking garage again.\n\nParking Picture opens straight to the live camera. Snap a quick photo of your parking spot — the floor number, pillar, row sign, or street marker — and it is saved instantly. When it is time to head back, your spot is waiting right on the same screen with the exact time you parked and how long you have been away.\n\nKEY FEATURES\n• Instant camera on launch: open the app and tap once to capture, with subtle haptic feedback and a soft shutter sound.\n• Built-in flashlight: illuminate dim underground garages and night lots with a single tap.\n• Automatic 20-photo history: swipe through up to your 20 most recent parking spots — older photos clean themselves up automatically.\n• Home Screen widget: view your latest 3 parking photos and live elapsed parking time right on your Home Screen.\n• Pinch & double-tap zoom: inspect level numbers, bay markers, and meter signs in crisp fullscreen detail.\n• Easy sharing: share one or multiple parking photos with friends or family using the system share sheet.\n• Private by design: your parking photos stay strictly on your device. No account, no sign-up, no ads, and works offline.",
+        "keywords": [
+          "car",
+          "find my car",
+          "spot",
+          "garage",
+          "level",
+          "lot",
+          "locator",
+          "widget",
+          "photo",
+          "flashlight",
+          "timer",
+          "auto"
+        ],
+        "promoText": "Snap your parking spot in one tap, check elapsed parking time on your Home Screen widget, and find your car fast.",
+        "privacyPolicyUrl": "https://github.com/loca-labs/parking-picture/blob/main/docs/privacy-policy.md",
+        "supportUrl": "https://github.com/loca-labs/parking-picture/blob/main/docs/support.md"
       }
     },
     "release": {
