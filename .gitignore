@@ -34,6 +34,8 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
+.env.*
 .env*.local
 
 # typescript
@@ -43,5 +45,14 @@ yarn-error.*
 /ios
 /android
 
-# secrets
+# IDE / agent (personal)
+.claude/
+.cursor/
+
+# secrets & cloud key files
 /secrets/
+**/service-account*.json
+**/google-services.json
+
+# EAS CLI build downloads at repo root
+/build-*
