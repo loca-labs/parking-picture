@@ -19,7 +19,7 @@ Everything needed to publish **Parking Picture (`v1.0.0`)** on the **Apple App S
 ### Store Images (`store-assets/`)
 | Platform | Assets Ready to Upload | Directory |
 | --- | --- | --- |
-| **Apple App Store** | `1024×1024` icon + **5 iPhone 6.9" (`1320×2868`)** screenshots + **5 iPhone 6.5" (`1284×2778`)** screenshots (24-bit PNG, no alpha) | `store-assets/app-store/` |
+| **Apple App Store** | `1024×1024` icon + **3 App Preview `.mp4` videos (`886×1920`)** + **5 iPhone 6.3" (`1206×2622`)** screenshots + **5 iPhone 6.1" (`1179×2556`)** screenshots (24-bit PNG, no alpha) | `store-assets/app-store/` |
 | **Google Play Store** | **`512×512` icon** + **`1024×500` feature graphic** + **5 Phone (`1080×1920`, 9:16)** screenshots | `store-assets/google-play/` |
 
 ---
@@ -50,7 +50,7 @@ Your iOS binary and App Store Connect API key (`2RC8A2KY72`) are already uploade
    - **General → App Information → Age Rating:** Answer **None** / **No** to every question (including **Social Media: No**) → **4+**.
    - **App Privacy:** Follow the exact 6-row table in [`docs/app-store-listing.md`](./app-store-listing.md#3-app-privacy-app-store-connect--app-privacy) → click **Publish**.
    - **Pricing and Availability:** Select **Free ($0.00)** and choose availability territories.
-   - **1.0 Prepare for Submission → Previews and Screenshots:** Upload the 5 PNGs from `store-assets/app-store/iphone-6.9-1320x2868/`.
+   - **1.0 Prepare for Submission → Previews and Screenshots (iPhone 6.1" or 6.3" displays):** Upload all 3 `.mp4` videos from `store-assets/app-store/app-preview-886x1920/` (`886 × 1920`) and the 5 PNGs from `store-assets/app-store/iphone-6.3-1206x2622/` (`1206 × 2622` — or `iphone-6.1-1179x2556/`).
    - **Build:** Select the uploaded `1.0.0` build from TestFlight.
    - **App Review Information:** Uncheck "Sign-in required", fill in contact phone/name, and paste the Reviewer Notes from [`docs/app-store-listing.md`](./app-store-listing.md#4-app-review-information).
    - Click **Add for Review → Submit to App Review**.

@@ -112,18 +112,21 @@ Thank you for reviewing Parking Picture!
 
 ---
 
-## 5. Store Screenshots & Assets Inventory
+## 5. Store Previews, Screenshots & Assets Inventory
 
-All files are generated and verified (exact pixel size, sRGB, **24-bit RGB PNG with no alpha channel**):
+All files are generated and verified for App Store Connect's **iPhone 6.1" or 6.3" Display** slot:
 
-| Asset | Dimensions | Path |
-| --- | --- | --- |
-| **App Store Icon** *(bundled automatically via `app.config.ts`, copy included for reference)* | `1024 × 1024 px` | `store-assets/app-store/icon-1024x1024.png` |
-| **iPhone 6.9" Display — Slide 1 (Capture & Recall)** *(Required slot)* | `1320 × 2868 px` | `store-assets/app-store/iphone-6.9-1320x2868/01-snap-in-one-tap.png` |
-| **iPhone 6.9" Display — Slide 2 (Pinch to Zoom)** | `1320 × 2868 px` | `store-assets/app-store/iphone-6.9-1320x2868/02-zoom-every-detail.png` |
-| **iPhone 6.9" Display — Slide 3 (Home Screen Widget)** | `1320 × 2868 px` | `store-assets/app-store/iphone-6.9-1320x2868/03-home-screen-widget.png` |
-| **iPhone 6.9" Display — Slide 4 (Flashlight & History)** | `1320 × 2868 px` | `store-assets/app-store/iphone-6.9-1320x2868/04-flashlight-and-history.png` |
-| **iPhone 6.9" Display — Slide 5 (Share & Private)** | `1320 × 2868 px` | `store-assets/app-store/iphone-6.9-1320x2868/05-share-and-private.png` |
-| **iPhone 6.5" Display (Optional fallback slot)** | `1284 × 2778 px` | `store-assets/app-store/iphone-6.5-1284x2778/01..05-*.png` |
+| Asset | Dimensions | Format & Specs | Path |
+| --- | --- | --- | --- |
+| **App Store Icon** *(bundled automatically via `app.config.ts`, copy included for reference)* | `1024 × 1024 px` | 24-bit RGB PNG (no alpha) | `store-assets/app-store/icon-1024x1024.png` |
+| **App Preview 1 — Capture, Flashlight & History** | `886 × 1920 px` | `.mp4` (18s, 30 fps, H.264 High Profile + 256 kbps 44.1 kHz Stereo AAC) | `store-assets/app-store/app-preview-886x1920/01-instant-capture-and-flashlight-886x1920.mp4` |
+| **App Preview 2 — Pinch-to-Zoom & Spot Inspection** | `886 × 1920 px` | `.mp4` (18s, 30 fps, H.264 High Profile + 256 kbps 44.1 kHz Stereo AAC) | `store-assets/app-store/app-preview-886x1920/02-pinch-zoom-and-find-spot-886x1920.mp4` |
+| **App Preview 3 — Multi-Share & Home Screen Widget** | `886 × 1920 px` | `.mp4` (18s, 30 fps, H.264 High Profile + 256 kbps 44.1 kHz Stereo AAC) | `store-assets/app-store/app-preview-886x1920/03-multi-share-and-widget-886x1920.mp4` |
+| **iPhone 6.3" Display — Slide 1 (Capture & Recall)** | `1206 × 2622 px` | 24-bit RGB PNG (no alpha) | `store-assets/app-store/iphone-6.3-1206x2622/01-snap-in-one-tap.png` |
+| **iPhone 6.3" Display — Slide 2 (Pinch to Zoom)** | `1206 × 2622 px` | 24-bit RGB PNG (no alpha) | `store-assets/app-store/iphone-6.3-1206x2622/02-zoom-every-detail.png` |
+| **iPhone 6.3" Display — Slide 3 (Home Screen Widget)** | `1206 × 2622 px` | 24-bit RGB PNG (no alpha) | `store-assets/app-store/iphone-6.3-1206x2622/03-home-screen-widget.png` |
+| **iPhone 6.3" Display — Slide 4 (Flashlight & History)** | `1206 × 2622 px` | 24-bit RGB PNG (no alpha) | `store-assets/app-store/iphone-6.3-1206x2622/04-flashlight-and-history.png` |
+| **iPhone 6.3" Display — Slide 5 (Share & Private)** | `1206 × 2622 px` | 24-bit RGB PNG (no alpha) | `store-assets/app-store/iphone-6.3-1206x2622/05-share-and-private.png` |
+| **iPhone 6.1" Display — Slides 1–5 (Alternative 6.1" size)** | `1179 × 2556 px` | 24-bit RGB PNG (no alpha) | `store-assets/app-store/iphone-6.1-1179x2556/01..05-*.png` |
 
-> In App Store Connect, uploading the **6.9" Display (`1320 × 2868`)** set automatically scales down to all smaller iPhone screen sizes unless you choose to override 6.5" separately.
+> **Upload Note:** App Store Connect supports up to **3 App Previews** and **10 Screenshots** per display slot. In the **iPhone 6.1" or 6.3" displays** dropzone, drag all 3 `.mp4` files from `store-assets/app-store/app-preview-886x1920/` (`886 × 1920 px`) and the 5 PNGs from `store-assets/app-store/iphone-6.3-1206x2622/` (`1206 × 2622 px` — or `iphone-6.1-1179x2556/` at `1179 × 2556 px`).

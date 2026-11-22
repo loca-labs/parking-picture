@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
 Generates store-ready visual assets for Apple App Store and Google Play Store:
-  - store-assets/app-store/icon-1024x1024.png                 (1024x1024, RGB PNG, no alpha)
-  - store-assets/app-store/iphone-6.9-1320x2868/01..05-*.png  (1320x2868, RGB PNG, no alpha)
-  - store-assets/app-store/iphone-6.5-1284x2778/01..05-*.png  (1284x2778, RGB PNG, no alpha)
-  - store-assets/google-play/icon-512x512.png                 (512x512, RGBA PNG, <=1024 KB)
-  - store-assets/google-play/feature-graphic-1024x500.png     (1024x500, RGB PNG, no alpha)
-  - store-assets/google-play/phone-1080x1920/01..05-*.png     (1080x1920, RGB PNG, no alpha)
+  - store-assets/app-store/icon-1024x1024.png                                                (1024x1024, RGB PNG, no alpha)
+  - store-assets/app-store/app-preview-886x1920/01-instant-capture-and-flashlight-886x1920.mp4 (886x1920, 18s 30fps H.264 + Stereo AAC)
+  - store-assets/app-store/app-preview-886x1920/02-pinch-zoom-and-find-spot-886x1920.mp4      (886x1920, 18s 30fps H.264 + Stereo AAC)
+  - store-assets/app-store/app-preview-886x1920/03-multi-share-and-widget-886x1920.mp4        (886x1920, 18s 30fps H.264 + Stereo AAC)
+  - store-assets/app-store/iphone-6.3-1206x2622/01..05-*.png                                 (1206x2622, RGB PNG, no alpha)
+  - store-assets/app-store/iphone-6.1-1179x2556/01..05-*.png                                 (1179x2556, RGB PNG, no alpha)
+  - store-assets/google-play/icon-512x512.png                                                (512x512, RGBA PNG, <=1024 KB)
+  - store-assets/google-play/feature-graphic-1024x500.png                                    (1024x500, RGB PNG, no alpha)
+  - store-assets/google-play/phone-1080x1920/01..05-*.png                                    (1080x1920, RGB PNG, no alpha)
 
 All in-app screens match the real React Native components in:
   - src/App.tsx
@@ -17,9 +20,16 @@ All in-app screens match the real React Native components in:
 
 from __future__ import annotations
 
+import array
 import math
+import shutil
+import subprocess
+import sys
+import tempfile
+import wave
 from pathlib import Path
-from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
+from typing import Callable
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
 ROOT = Path(__file__).resolve().parent.parent
 ASSETS_DIR = ROOT / "assets"
@@ -274,6 +284,8 @@ def render_main_screen(
     torch_on: bool = False,
     cam_focus: tuple[float, float] = (0.5, 0.45),
     saved_focus: tuple[float, float] = (0.5, 0.45),
+    cam_zoom: float = 1.02,
+    shutter_scale: float = 1.0,
 ) -> Image.Image:
     """Renders exact replica of `MainScreen` in `src/App.tsx`."""
     s = sw / 780.0
@@ -292,7 +304,7 @@ def render_main_screen(
 
     # --- Top pane: live camera ---
     top_y = top_inset
-    cam_crop = cover_crop(camera_photo, pane_w, pane_h, zoom=1.02, focus=cam_focus)
+    cam_crop = cover_crop(camera_photo, pane_w, pane_h, zoom=cam_zoom, focus=cam_focus)
     paste_rounded(screen, cam_crop, (margin_x, top_y), pane_r)
 
     # CAMERA badge (top-left)
@@ -322,8 +334,8 @@ def render_main_screen(
     # --- Shutter button row ---
     shutter_cy = top_y + pane_h + shutter_row_h // 2
     shutter_cx = sw // 2
-    outer_r = int(70 * s)
-    inner_r = int(53 * s)
+    outer_r = int(70 * s * shutter_scale)
+    inner_r = int(53 * s * shutter_scale)
     # Supersampled shutter circle for ultra-smooth anti-aliasing
     ss = 3
     sb_dim = (outer_r * 2 + 8) * ss
@@ -399,6 +411,7 @@ def render_photo_viewer_screen(
     zoom: float = 1.65,
     focus: tuple[float, float] = (0.52, 0.42),
     caption_text: str = "1/3 · 2:15 PM",
+    selected_count: int = 2,
 ) -> Image.Image:
     """Renders exact replica of `PhotoViewer` in `src/components/PhotoViewer.tsx`."""
     s = sw / 780.0
@@ -420,7 +433,7 @@ def render_photo_viewer_screen(
     draw_pill_badge(
         screen,
         (int(32 * s), top_inset + int(28 * s)),
-        "2 selected" if selecting else caption_text,
+        f"{selected_count} selected" if selecting else caption_text,
         caption_font,
         bg_rgba=(0, 0, 0, 155),
         pad_x=int(16 * s),
@@ -485,10 +498,10 @@ def render_photo_viewer_screen(
         # Selecting mode: blue check circle + thumbnail strip + Select all / Share (2)
         bar_y = sh - bottom_inset - int(104 * s)
 
-        # Bottom buttons: Select all | Share (2)
+        # Bottom buttons: Select all | Share (N)
         btns = [
             ("Select all", (32, 36, 44, 210), (255, 255, 255, 255)),
-            ("Share (2)", (255, 255, 255, 255), (0, 0, 0, 255)),
+            (f"Share ({selected_count})", (255, 255, 255, 255), (0, 0, 0, 255)),
         ]
         probe = ImageDraw.Draw(screen)
         pad_x, pad_y = int(38 * s), int(18 * s)
@@ -518,7 +531,7 @@ def render_photo_viewer_screen(
         t_gap = int(16 * s)
         strip_w = len(thumbs) * thumb_sz + (len(thumbs) - 1) * t_gap
         tx = (sw - strip_w) // 2
-        selected_indices = {0, 1}
+        selected_indices = set(range(max(1, selected_count)))
         for idx, th_img in enumerate(thumbs):
             tc = cover_crop(th_img, thumb_sz, thumb_sz, zoom=1.05).convert("RGBA")
             if idx not in selected_indices:
@@ -632,6 +645,7 @@ def render_home_screen_widget_scene(
     platform: str,
     app_icon: Image.Image,
     photos: list[Image.Image],
+    age_text: str = "18 min",
 ) -> Image.Image:
     """Renders an iOS or Android Home Screen showcasing the `Recent parking photos` widget + app icon."""
     s = sw / 780.0
@@ -648,7 +662,7 @@ def render_home_screen_widget_scene(
     # 1) Medium / 4x2 wide widget at top
     med_y = top_inset + int(34 * s)
     med_h = int(318 * s)
-    med_widget = render_widget_card(content_w, med_h, photos, age_text="18 min", layout="medium", s=s)
+    med_widget = render_widget_card(content_w, med_h, photos, age_text=age_text, layout="medium", s=s)
     screen.alpha_composite(med_widget, (pad_x, med_y))
     w_label = "Parking Picture"
     w_bb = d.textbbox((0, 0), w_label, font=lbl_font)
@@ -657,7 +671,7 @@ def render_home_screen_widget_scene(
     # 2) Large / 4x4 widget below + app icon row
     lg_y = med_y + med_h + int(68 * s)
     lg_h = int(640 * s)
-    lg_widget = render_widget_card(content_w, lg_h, photos, age_text="18 min", layout="large", s=s)
+    lg_widget = render_widget_card(content_w, lg_h, photos, age_text=age_text, layout="large", s=s)
     screen.alpha_composite(lg_widget, (pad_x, lg_y))
     d.text(((sw - (w_bb[2] - w_bb[0])) // 2, lg_y + lg_h + int(12 * s)), w_label, font=lbl_font, fill=(255, 255, 255, 230))
 
@@ -928,14 +942,752 @@ def generate_feature_graphic(
     return canvas.convert("RGB")
 
 
+def ease_in_out(t: float) -> float:
+    t = max(0.0, min(1.0, t))
+    return t * t * (3.0 - 2.0 * t)
+
+
+def render_main_screen_swipe(
+    sw: int,
+    sh: int,
+    camera_photo: Image.Image,
+    saved_a: tuple[Image.Image, str, str, str, tuple[float, float]],
+    saved_b: tuple[Image.Image, str, str, str, tuple[float, float]],
+    progress: float,
+    torch_on: bool = False,
+    cam_focus: tuple[float, float] = (0.5, 0.45),
+) -> Image.Image:
+    """Renders `MainScreen` while horizontally paging between two saved photos in the bottom FlatList."""
+    p = ease_in_out(progress)
+    s = sw / 780.0
+    screen = render_main_screen(
+        sw, sh, "ios",
+        camera_photo=camera_photo,
+        saved_photo=saved_a[0],
+        parked_time=saved_a[1],
+        age_text=saved_a[2],
+        counter_text="",
+        torch_on=torch_on,
+        cam_focus=cam_focus,
+    )
+    top_inset = int(112 * s)
+    bottom_inset = int(52 * s)
+    margin_x = int(16 * s)
+    pane_r = int(32 * s)
+    shutter_row_h = int(176 * s)
+    avail_h = sh - top_inset - bottom_inset - shutter_row_h
+    pane_h = avail_h // 2
+    pane_w = sw - margin_x * 2
+    bot_y = top_inset + pane_h + shutter_row_h
+    label_font = get_font(int(23 * s), weight=700)
+
+    def build_saved_card(item: tuple[Image.Image, str, str, str, tuple[float, float]]) -> Image.Image:
+        ph, ptime, age, cnt, foc = item
+        card = cover_crop(ph, pane_w, pane_h, zoom=1.0, focus=foc).convert("RGBA")
+        draw_pill_badge(
+            card,
+            (int(20 * s), int(20 * s)),
+            f"PARKED HERE · {ptime}",
+            label_font,
+            bg_rgba=(0, 0, 0, 152),
+            pad_x=int(16 * s),
+            pad_y=int(9 * s),
+            radius=int(15 * s),
+        )
+        draw_pill_badge(
+            card,
+            (pane_w - int(20 * s), int(20 * s)),
+            cnt,
+            label_font,
+            bg_rgba=(0, 0, 0, 152),
+            pad_x=int(16 * s),
+            pad_y=int(9 * s),
+            radius=int(15 * s),
+            anchor_right=True,
+        )
+        draw_pill_badge(
+            card,
+            (int(20 * s), pane_h - int(20 * s)),
+            age,
+            label_font,
+            bg_rgba=(0, 0, 0, 152),
+            pad_x=int(16 * s),
+            pad_y=int(9 * s),
+            radius=int(15 * s),
+            anchor_bottom=True,
+        )
+        return card
+
+    strip = Image.new("RGBA", (pane_w, pane_h), (17, 17, 17, 255))
+    offset_x = int(round(-p * pane_w))
+    strip.alpha_composite(build_saved_card(saved_a), (offset_x, 0))
+    strip.alpha_composite(build_saved_card(saved_b), (offset_x + pane_w, 0))
+
+    # Clear bottom pane rect and paste rounded strip
+    clear_d = ImageDraw.Draw(screen)
+    clear_d.rectangle((margin_x, bot_y, margin_x + pane_w, bot_y + pane_h), fill=(0, 0, 0, 255))
+    paste_rounded(screen, strip, (margin_x, bot_y), pane_r)
+    return screen
+
+
+def render_photo_viewer_swipe(
+    sw: int,
+    sh: int,
+    photo_a: Image.Image,
+    caption_a: str,
+    photo_b: Image.Image,
+    caption_b: str,
+    thumbs: list[Image.Image],
+    progress: float,
+    zoom_a: float = 1.04,
+    zoom_b: float = 1.04,
+) -> Image.Image:
+    """Renders `PhotoViewer` during a horizontal swipe between two saved photos."""
+    p = ease_in_out(progress)
+    s = sw / 780.0
+    base = render_photo_viewer_screen(
+        sw, sh, "ios",
+        main_photo=photo_b if p >= 0.5 else photo_a,
+        thumbs=thumbs,
+        selecting=False,
+        zoom=1.04,
+        caption_text=caption_b if p >= 0.5 else caption_a,
+    )
+    photo_h = int(sh * 0.78)
+    photo_y = (sh - photo_h) // 2
+    crop_a = cover_crop(photo_a, sw, photo_h, zoom=zoom_a, focus=(0.50, 0.44)).convert("RGBA")
+    crop_b = cover_crop(photo_b, sw, photo_h, zoom=zoom_b, focus=(0.50, 0.44)).convert("RGBA")
+
+    canvas = Image.new("RGBA", (sw, sh), (0, 0, 0, 255))
+    ox = int(round(-p * sw))
+    canvas.alpha_composite(crop_a, (ox, photo_y))
+    canvas.alpha_composite(crop_b, (ox + sw, photo_y))
+
+    # Re-apply top & bottom chrome from `base`
+    top_h = photo_y
+    bot_y = photo_y + photo_h
+    canvas.alpha_composite(base.crop((0, 0, sw, max(top_h, int(220 * s)))), (0, 0))
+    canvas.alpha_composite(base.crop((0, min(bot_y, sh - int(200 * s)), sw, sh)), (0, min(bot_y, sh - int(200 * s))))
+    return canvas
+
+
+def overlay_ios_share_sheet(
+    base_rgb: Image.Image,
+    photos: list[Image.Image],
+    slide_progress: float,
+) -> Image.Image:
+    """Composites a dark iOS system Share Sheet sliding up from the bottom for `react-native-share`."""
+    W, H = base_rgb.size
+    s = W / 780.0
+    p = ease_in_out(slide_progress)
+
+    out = base_rgb.convert("RGBA")
+    dim = Image.new("RGBA", (W, H), (0, 0, 0, int(125 * p)))
+    out = Image.alpha_composite(out, dim)
+
+    sheet_h = int(760 * s)
+    sheet_y = H - int(round(sheet_h * p))
+    if sheet_y >= H:
+        return out.convert("RGB")
+
+    sheet = Image.new("RGBA", (W, sheet_h), (0, 0, 0, 0))
+    sd = ImageDraw.Draw(sheet)
+    sd.rounded_rectangle((0, 0, W - 1, sheet_h + 60), radius=int(42 * s), fill=(28, 30, 36, 250), outline=(255, 255, 255, 34), width=2)
+
+    # Grabber bar
+    gw, gh = int(76 * s), int(9 * s)
+    sd.rounded_rectangle(((W - gw) // 2, int(16 * s), (W + gw) // 2, int(16 * s) + gh), radius=gh // 2, fill=(140, 145, 156, 180))
+
+    # Header row: stacked photo preview + "4 Parking Photos"
+    thumb_sz = int(92 * s)
+    hx = int(38 * s)
+    hy = int(48 * s)
+    paste_rounded(sheet, cover_crop(photos[0], thumb_sz, thumb_sz, zoom=1.06), (hx, hy), int(18 * s))
+    title_f = get_font(int(28 * s), weight=700)
+    sub_f = get_font(int(21 * s), weight=450)
+    sd.text((hx + thumb_sz + int(22 * s), hy + int(16 * s)), f"{len(photos)} Parking Photos", font=title_f, fill=(255, 255, 255, 255))
+    sd.text((hx + thumb_sz + int(22 * s), hy + int(52 * s)), "Parking Picture · JPEG Images", font=sub_f, fill=(165, 172, 186, 235))
+
+    # Close X on sheet
+    cx_sz = int(56 * s)
+    cx_x = W - int(38 * s) - cx_sz
+    sd.ellipse((cx_x, hy + int(16 * s), cx_x + cx_sz, hy + int(16 * s) + cx_sz), fill=(56, 60, 70, 255))
+    draw_close_x(sheet, (cx_x + cx_sz // 2, hy + int(16 * s) + cx_sz // 2), int(cx_sz * 0.44), (210, 215, 225, 255), stroke=max(2, int(2.8 * s)))
+
+    sd.line((int(32 * s), hy + thumb_sz + int(28 * s), W - int(32 * s), hy + thumb_sz + int(28 * s)), fill=(255, 255, 255, 26), width=2)
+
+    # Share target icons row (AirDrop, Messages, Mail, Notes)
+    targets = [
+        ("AirDrop", (10, 132, 255), "A"),
+        ("Messages", (48, 209, 88), "M"),
+        ("Mail", (10, 132, 255), "@"),
+        ("Notes", (255, 214, 10), "N"),
+    ]
+    ic_sz = int(104 * s)
+    row_y = hy + thumb_sz + int(54 * s)
+    gap = (W - int(96 * s) - ic_sz * len(targets)) // (len(targets) - 1)
+    lbl_f = get_font(int(20 * s), weight=500)
+    gf = get_font(int(42 * s), weight=750)
+    for idx, (lbl, col, gl) in enumerate(targets):
+        ix = int(48 * s) + idx * (ic_sz + gap)
+        tile = Image.new("RGBA", (ic_sz, ic_sz), (*col, 255))
+        td = ImageDraw.Draw(tile)
+        bb = td.textbbox((0, 0), gl, font=gf)
+        fg_c = (20, 20, 20, 255) if lbl == "Notes" else (255, 255, 255, 255)
+        td.text(((ic_sz - (bb[2] - bb[0])) // 2 - bb[0], (ic_sz - (bb[3] - bb[1])) // 2 - bb[1]), gl, font=gf, fill=fg_c)
+        paste_rounded(sheet, tile, (ix, row_y), int(24 * s))
+        lbb = sd.textbbox((0, 0), lbl, font=lbl_f)
+        sd.text((ix + (ic_sz - (lbb[2] - lbb[0])) // 2, row_y + ic_sz + int(12 * s)), lbl, font=lbl_f, fill=(225, 230, 240, 240))
+
+    # Action group card ("Copy Photos", "Save 4 Images")
+    card_x = int(36 * s)
+    card_y = row_y + ic_sz + int(68 * s)
+    card_w = W - card_x * 2
+    row_h = int(88 * s)
+    sd.rounded_rectangle((card_x, card_y, card_x + card_w, card_y + row_h * 2), radius=int(24 * s), fill=(44, 47, 56, 255))
+    act_f = get_font(int(26 * s), weight=500)
+    sd.text((card_x + int(30 * s), card_y + int(26 * s)), "Copy Photos", font=act_f, fill=(255, 255, 255, 255))
+    sd.line((card_x + int(24 * s), card_y + row_h, card_x + card_w - int(24 * s), card_y + row_h), fill=(255, 255, 255, 28), width=2)
+    sd.text((card_x + int(30 * s), card_y + row_h + int(26 * s)), f"Save {len(photos)} Images", font=act_f, fill=(255, 255, 255, 255))
+
+    out.alpha_composite(sheet, (0, sheet_y))
+    return out.convert("RGB")
+
+
+def encode_preview_mp4(
+    frame_fn: Callable[[int], Image.Image],
+    total_frames: int,
+    sound_cues: list[tuple[float, float]],
+    output_mp4: Path,
+    encoder_bin: Path,
+) -> None:
+    """Writes rendered JPEG frames + 256kbps 44.1kHz Stereo AAC audio and muxes an Apple-compliant .mp4."""
+    fps = 30
+    with tempfile.TemporaryDirectory(prefix="pp-app-preview-") as tmpdir:
+        tmp_path = Path(tmpdir)
+        for f in range(total_frames):
+            img = frame_fn(f)
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            img.save(tmp_path / f"frame-{f:04d}.jpg", format="JPEG", quality=95, subsampling=0)
+
+        sample_rate = 44100
+        total_samples = int(total_frames / fps * sample_rate)
+        stereo_pcm = array.array("h", [0] * (total_samples * 2))
+
+        shutter_wav = ASSETS_DIR / "sounds" / "shutter-soft.wav"
+        if shutter_wav.exists():
+            with wave.open(str(shutter_wav), "rb") as wf:
+                mono_frames = array.array("h")
+                mono_frames.frombytes(wf.readframes(wf.getnframes()))
+            for sec, gain in sound_cues:
+                start_idx = int(sec * sample_rate)
+                for k, val in enumerate(mono_frames):
+                    pos = start_idx + k
+                    if 0 <= pos < total_samples:
+                        mixed = max(-32768, min(32767, stereo_pcm[pos * 2] + int(val * gain)))
+                        stereo_pcm[pos * 2] = mixed
+                        stereo_pcm[pos * 2 + 1] = mixed
+
+        wav_out = tmp_path / "preview-audio.wav"
+        m4a_out = tmp_path / "preview-audio.m4a"
+        with wave.open(str(wav_out), "wb") as wf_out:
+            wf_out.setnchannels(2)
+            wf_out.setsampwidth(2)
+            wf_out.setframerate(sample_rate)
+            wf_out.writeframes(stereo_pcm.tobytes())
+
+        subprocess.run(
+            [
+                "afconvert",
+                "-f", "m4af",
+                "-d", "aac",
+                "-b", "256000",
+                "-c", "2",
+                str(wav_out),
+                str(m4a_out),
+            ],
+            check=True,
+        )
+
+        subprocess.run(
+            [
+                str(encoder_bin),
+                str(tmp_path),
+                str(total_frames),
+                str(m4a_out),
+                str(output_mp4),
+            ],
+            check=True,
+        )
+
+
+def generate_all_app_previews(
+    preview_dir: Path,
+    app_icon: Image.Image,
+    photo_b2: Image.Image,
+    photo_p4: Image.Image,
+    photo_torch: Image.Image,
+    photo_lot_a: Image.Image,
+) -> None:
+    """
+    Generates 3 distinct App Store Connect App Preview videos (886x1920, 18.0s @ 30fps,
+    H.264 High Profile Level 4.0 + 256kbps 44.1kHz Stereo AAC):
+      1. 01-instant-capture-and-flashlight-886x1920.mp4
+      2. 02-pinch-zoom-and-find-spot-886x1920.mp4
+      3. 03-multi-share-and-widget-886x1920.mp4
+    """
+    W, H = 886, 1920
+    FPS = 30
+    TOTAL_FRAMES = 18 * FPS  # 540 frames = 18.0s (Apple requires 15s..30s)
+
+    # Remove old single-file previews if present so directory contains cleanly the 3 previews
+    for legacy_name in ("app-preview-886x1920.mp4", "app-preview-886x1920.mov"):
+        legacy_file = preview_dir / legacy_name
+        if legacy_file.exists():
+            legacy_file.unlink()
+
+    white_flash = Image.new("RGB", (W, H), (255, 255, 255))
+    thumbs_3 = [photo_b2, photo_p4, photo_lot_a]
+    thumbs_4 = [photo_p4, photo_b2, photo_lot_a, photo_torch]
+
+    with tempfile.TemporaryDirectory(prefix="pp-swift-bin-") as bindir:
+        encoder_bin = Path(bindir) / "encode-app-preview"
+        subprocess.run(
+            ["swiftc", "-O", str(ROOT / "scripts" / "encode-app-preview.swift"), "-o", str(encoder_bin)],
+            check=True,
+        )
+
+        # =========================================================================
+        # PREVIEW 1: One-Tap Capture, Dark Garage Flashlight & Spot History (18.0s)
+        # =========================================================================
+        dark_garage = ImageEnhance.Brightness(photo_torch).enhance(0.42)
+        lit_garage = ImageEnhance.Brightness(photo_torch).enhance(1.06)
+
+        p1_after_first = render_main_screen(
+            W, H, "ios",
+            camera_photo=photo_p4,
+            saved_photo=photo_b2,
+            parked_time="9:41 AM",
+            age_text="< 1 min",
+            counter_text="1/3",
+            torch_on=False,
+        ).convert("RGB")
+
+        p1_dark_off = render_main_screen(
+            W, H, "ios",
+            camera_photo=dark_garage,
+            saved_photo=photo_b2,
+            parked_time="9:41 AM",
+            age_text="< 1 min",
+            counter_text="1/3",
+            torch_on=False,
+            cam_focus=(0.52, 0.45),
+        ).convert("RGB")
+
+        p1_torch_lit = render_main_screen(
+            W, H, "ios",
+            camera_photo=lit_garage,
+            saved_photo=photo_b2,
+            parked_time="9:41 AM",
+            age_text="< 1 min",
+            counter_text="1/3",
+            torch_on=True,
+            cam_focus=(0.52, 0.45),
+        ).convert("RGB")
+
+        p1_after_second = render_main_screen(
+            W, H, "ios",
+            camera_photo=lit_garage,
+            saved_photo=lit_garage,
+            parked_time="9:42 AM",
+            age_text="< 1 min",
+            counter_text="1/4",
+            torch_on=True,
+            cam_focus=(0.52, 0.45),
+            saved_focus=(0.52, 0.45),
+        ).convert("RGB")
+
+        saved_1 = (lit_garage, "9:42 AM", "< 1 min", "1/4", (0.52, 0.45))
+        saved_2 = (photo_b2, "9:41 AM", "1 min", "2/4", (0.50, 0.45))
+        saved_3 = (photo_p4, "8:10 AM", "1 hr, 32 min", "3/4", (0.50, 0.45))
+
+        p1_hist_2 = render_main_screen(
+            W, H, "ios",
+            camera_photo=lit_garage,
+            saved_photo=photo_b2,
+            parked_time="9:41 AM",
+            age_text="1 min",
+            counter_text="2/4",
+            torch_on=True,
+            cam_focus=(0.52, 0.45),
+        ).convert("RGB")
+
+        p1_hist_3 = render_main_screen(
+            W, H, "ios",
+            camera_photo=lit_garage,
+            saved_photo=photo_p4,
+            parked_time="8:10 AM",
+            age_text="1 hr, 32 min",
+            counter_text="3/4",
+            torch_on=True,
+            cam_focus=(0.52, 0.45),
+        ).convert("RGB")
+
+        def frame_preview_1(f: int) -> Image.Image:
+            if f < 60:
+                p = ease_in_out(f / 59.0)
+                return render_main_screen(
+                    W, H, "ios",
+                    camera_photo=photo_b2,
+                    saved_photo=photo_p4,
+                    parked_time="8:10 AM",
+                    age_text="1 hr, 31 min",
+                    counter_text="1/2",
+                    cam_focus=(0.36 + 0.14 * p, 0.45),
+                    cam_zoom=1.12 - 0.10 * p,
+                ).convert("RGB")
+            if f < 66:
+                p = ease_in_out((f - 60) / 5.0)
+                return render_main_screen(
+                    W, H, "ios",
+                    camera_photo=photo_b2,
+                    saved_photo=photo_p4,
+                    parked_time="8:10 AM",
+                    age_text="1 hr, 31 min",
+                    counter_text="1/2",
+                    cam_focus=(0.50, 0.45),
+                    cam_zoom=1.02,
+                    shutter_scale=1.0 - 0.08 * p,
+                ).convert("RGB")
+            if f < 75:
+                p = (f - 66) / 8.0
+                return Image.blend(p1_after_first, white_flash, max(0.0, 0.55 * (1.0 - p)))
+            if f < 168:
+                # Covers 5.0s default poster frame (f=150): newly captured spot saved below live camera
+                return p1_after_first
+            if f < 178:
+                return Image.blend(p1_after_first, p1_dark_off, ease_in_out((f - 168) / 9.0))
+            if f < 210:
+                return p1_dark_off
+            if f < 228:
+                # Tap Torch -> illuminates dark garage smoothly
+                p = ease_in_out((f - 210) / 17.0)
+                cur_cam = ImageEnhance.Brightness(photo_torch).enhance(0.42 + 0.64 * p)
+                return render_main_screen(
+                    W, H, "ios",
+                    camera_photo=cur_cam,
+                    saved_photo=photo_b2,
+                    parked_time="9:41 AM",
+                    age_text="< 1 min",
+                    counter_text="1/3",
+                    torch_on=True,
+                    cam_focus=(0.52, 0.45),
+                ).convert("RGB")
+            if f < 294:
+                return p1_torch_lit
+            if f < 300:
+                p = ease_in_out((f - 294) / 5.0)
+                return render_main_screen(
+                    W, H, "ios",
+                    camera_photo=lit_garage,
+                    saved_photo=photo_b2,
+                    parked_time="9:41 AM",
+                    age_text="< 1 min",
+                    counter_text="1/3",
+                    torch_on=True,
+                    cam_focus=(0.52, 0.45),
+                    shutter_scale=1.0 - 0.08 * p,
+                ).convert("RGB")
+            if f < 309:
+                p = (f - 300) / 8.0
+                return Image.blend(p1_after_second, white_flash, max(0.0, 0.55 * (1.0 - p)))
+            if f < 366:
+                return p1_after_second
+            if f < 386:
+                return render_main_screen_swipe(
+                    W, H, lit_garage, saved_1, saved_2, (f - 366) / 19.0, torch_on=True, cam_focus=(0.52, 0.45)
+                ).convert("RGB")
+            if f < 444:
+                return p1_hist_2
+            if f < 464:
+                return render_main_screen_swipe(
+                    W, H, lit_garage, saved_2, saved_3, (f - 444) / 19.0, torch_on=True, cam_focus=(0.52, 0.45)
+                ).convert("RGB")
+            return p1_hist_3
+
+        encode_preview_mp4(
+            frame_preview_1,
+            TOTAL_FRAMES,
+            sound_cues=[(2.05, 0.85), (7.00, 0.30), (9.85, 0.85), (12.20, 0.22), (14.80, 0.22)],
+            output_mp4=preview_dir / "01-instant-capture-and-flashlight-886x1920.mp4",
+            encoder_bin=encoder_bin,
+        )
+
+        # =========================================================================
+        # PREVIEW 2: Fullscreen Pinch-to-Zoom & Multi-Spot Inspection (18.0s)
+        # =========================================================================
+        p2_main_start = render_main_screen(
+            W, H, "ios",
+            camera_photo=photo_lot_a,
+            saved_photo=photo_b2,
+            parked_time="2:15 PM",
+            age_text="42 min",
+            counter_text="1/3",
+        ).convert("RGB")
+
+        p2_main_end = render_main_screen(
+            W, H, "ios",
+            camera_photo=photo_lot_a,
+            saved_photo=photo_lot_a,
+            parked_time="Yesterday",
+            age_text="18 hr, 10 min",
+            counter_text="3/3",
+            saved_focus=(0.38, 0.45),
+        ).convert("RGB")
+
+        p2_viewer_b2_base = render_photo_viewer_screen(
+            W, H, "ios",
+            main_photo=photo_b2,
+            thumbs=thumbs_3,
+            selecting=False,
+            zoom=1.04,
+            focus=(0.50, 0.44),
+            caption_text="1/3 · 2:15 PM",
+        ).convert("RGB")
+
+        def frame_preview_2(f: int) -> Image.Image:
+            if f < 62:
+                return p2_main_start
+            if f < 74:
+                return Image.blend(p2_main_start, p2_viewer_b2_base, ease_in_out((f - 62) / 11.0))
+            if f < 246:
+                # 2.5s..8.2s: Pinch-to-zoom onto LEVEL B2 · 14B (holds 1.78x across 5.0s poster frame!)
+                if f < 130:
+                    p = ease_in_out((f - 74) / 55.0)
+                    z = 1.04 + 0.74 * p
+                    fy = 0.44 - 0.03 * p
+                elif f < 190:
+                    z = 1.78
+                    fy = 0.41
+                elif f < 226:
+                    p = ease_in_out((f - 190) / 35.0)
+                    z = 1.78 - 0.74 * p
+                    fy = 0.41 + 0.03 * p
+                else:
+                    z = 1.04
+                    fy = 0.44
+                return render_photo_viewer_screen(
+                    W, H, "ios",
+                    main_photo=photo_b2,
+                    thumbs=thumbs_3,
+                    selecting=False,
+                    zoom=z,
+                    focus=(0.50, fy),
+                    caption_text="1/3 · 2:15 PM",
+                ).convert("RGB")
+            if f < 266:
+                return render_photo_viewer_swipe(
+                    W, H,
+                    photo_b2, "1/3 · 2:15 PM",
+                    photo_p4, "2/3 · 11:05 AM",
+                    thumbs_3,
+                    (f - 246) / 19.0,
+                ).convert("RGB")
+            if f < 414:
+                # Zoom onto P4 column marker
+                if f < 318:
+                    p = ease_in_out((f - 266) / 51.0)
+                    z = 1.04 + 0.66 * p
+                elif f < 366:
+                    z = 1.70
+                elif f < 402:
+                    p = ease_in_out((f - 366) / 35.0)
+                    z = 1.70 - 0.66 * p
+                else:
+                    z = 1.04
+                return render_photo_viewer_screen(
+                    W, H, "ios",
+                    main_photo=photo_p4,
+                    thumbs=thumbs_3,
+                    selecting=False,
+                    zoom=z,
+                    focus=(0.50, 0.43),
+                    caption_text="2/3 · 11:05 AM",
+                ).convert("RGB")
+            if f < 434:
+                return render_photo_viewer_swipe(
+                    W, H,
+                    photo_p4, "2/3 · 11:05 AM",
+                    photo_lot_a, "3/3 · Yesterday",
+                    thumbs_3,
+                    (f - 414) / 19.0,
+                ).convert("RGB")
+            if f < 492:
+                p = ease_in_out(min(1.0, (f - 434) / 36.0))
+                return render_photo_viewer_screen(
+                    W, H, "ios",
+                    main_photo=photo_lot_a,
+                    thumbs=thumbs_3,
+                    selecting=False,
+                    zoom=1.04 + 0.34 * p,
+                    focus=(0.38, 0.44),
+                    caption_text="3/3 · Yesterday",
+                ).convert("RGB")
+            if f < 504:
+                viewer_last = render_photo_viewer_screen(
+                    W, H, "ios",
+                    main_photo=photo_lot_a,
+                    thumbs=thumbs_3,
+                    selecting=False,
+                    zoom=1.38,
+                    focus=(0.38, 0.44),
+                    caption_text="3/3 · Yesterday",
+                ).convert("RGB")
+                return Image.blend(viewer_last, p2_main_end, ease_in_out((f - 492) / 11.0))
+            return p2_main_end
+
+        encode_preview_mp4(
+            frame_preview_2,
+            TOTAL_FRAMES,
+            sound_cues=[(2.08, 0.30), (6.35, 0.25), (8.20, 0.22), (13.80, 0.22), (16.40, 0.28)],
+            output_mp4=preview_dir / "02-pinch-zoom-and-find-spot-886x1920.mp4",
+            encoder_bin=encoder_bin,
+        )
+
+        # =========================================================================
+        # PREVIEW 3: Multi-Photo Share & Home Screen Widget Deep-Link (18.0s)
+        # =========================================================================
+        p3_viewer_initial = render_photo_viewer_screen(
+            W, H, "ios",
+            main_photo=photo_p4,
+            thumbs=thumbs_4,
+            selecting=False,
+            zoom=1.08,
+            focus=(0.50, 0.44),
+            caption_text="1/4 · 2:15 PM",
+        ).convert("RGB")
+
+        p3_sel_1 = render_photo_viewer_screen(
+            W, H, "ios",
+            main_photo=photo_p4,
+            thumbs=thumbs_4,
+            selecting=True,
+            zoom=1.08,
+            focus=(0.50, 0.44),
+            selected_count=1,
+        ).convert("RGB")
+
+        p3_sel_2 = render_photo_viewer_screen(
+            W, H, "ios",
+            main_photo=photo_p4,
+            thumbs=thumbs_4,
+            selecting=True,
+            zoom=1.08,
+            focus=(0.50, 0.44),
+            selected_count=2,
+        ).convert("RGB")
+
+        p3_sel_4 = render_photo_viewer_screen(
+            W, H, "ios",
+            main_photo=photo_p4,
+            thumbs=thumbs_4,
+            selecting=True,
+            zoom=1.08,
+            focus=(0.50, 0.44),
+            selected_count=4,
+        ).convert("RGB")
+
+        p3_widget_18 = render_home_screen_widget_scene(
+            W, H, "ios",
+            app_icon=app_icon,
+            photos=thumbs_3,
+            age_text="18 min",
+        ).convert("RGB")
+
+        p3_widget_19 = render_home_screen_widget_scene(
+            W, H, "ios",
+            app_icon=app_icon,
+            photos=thumbs_3,
+            age_text="19 min",
+        ).convert("RGB")
+
+        p3_deeplink_viewer = render_photo_viewer_screen(
+            W, H, "ios",
+            main_photo=photo_b2,
+            thumbs=thumbs_3,
+            selecting=False,
+            zoom=1.22,
+            focus=(0.50, 0.43),
+            caption_text="1/3 · 2:15 PM",
+        ).convert("RGB")
+
+        def frame_preview_3(f: int) -> Image.Image:
+            if f < 54:
+                return p3_viewer_initial
+            if f < 64:
+                return Image.blend(p3_viewer_initial, p3_sel_1, ease_in_out((f - 54) / 9.0))
+            if f < 102:
+                return p3_sel_1
+            if f < 110:
+                return Image.blend(p3_sel_1, p3_sel_2, ease_in_out((f - 102) / 7.0))
+            if f < 186:
+                # Covers 5.0s default poster frame (f=150): 2 selected · Share (2)
+                return p3_sel_2
+            if f < 194:
+                return Image.blend(p3_sel_2, p3_sel_4, ease_in_out((f - 186) / 7.0))
+            if f < 222:
+                return p3_sel_4
+            if f < 240:
+                return overlay_ios_share_sheet(p3_sel_4, thumbs_4, (f - 222) / 17.0)
+            if f < 316:
+                return overlay_ios_share_sheet(p3_sel_4, thumbs_4, 1.0)
+            if f < 332:
+                return overlay_ios_share_sheet(p3_sel_4, thumbs_4, 1.0 - (f - 316) / 15.0)
+            if f < 346:
+                return Image.blend(p3_sel_4, p3_widget_18, ease_in_out((f - 332) / 13.0))
+            if f < 414:
+                return p3_widget_18
+            if f < 424:
+                return Image.blend(p3_widget_18, p3_widget_19, ease_in_out((f - 414) / 9.0))
+            if f < 480:
+                return p3_widget_19
+            if f < 492:
+                # Tap widget tile -> deep-link straight into fullscreen PhotoViewer
+                return Image.blend(p3_widget_19, p3_deeplink_viewer, ease_in_out((f - 480) / 11.0))
+            p = ease_in_out(min(1.0, (f - 492) / 36.0))
+            return render_photo_viewer_screen(
+                W, H, "ios",
+                main_photo=photo_b2,
+                thumbs=thumbs_3,
+                selecting=False,
+                zoom=1.22 + 0.36 * p,
+                focus=(0.50, 0.42),
+                caption_text="1/3 · 2:15 PM",
+            ).convert("RGB")
+
+        encode_preview_mp4(
+            frame_preview_3,
+            TOTAL_FRAMES,
+            sound_cues=[(1.80, 0.28), (3.40, 0.25), (6.20, 0.25), (7.40, 0.30), (16.00, 0.30)],
+            output_mp4=preview_dir / "03-multi-share-and-widget-886x1920.mp4",
+            encoder_bin=encoder_bin,
+        )
+
+
 def main() -> None:
     app_store_dir = OUT_DIR / "app-store"
-    ios_69_dir = app_store_dir / "iphone-6.9-1320x2868"
-    ios_65_dir = app_store_dir / "iphone-6.5-1284x2778"
+    # Remove replaced 6.9" and 6.5" folders
+    shutil.rmtree(app_store_dir / "iphone-6.9-1320x2868", ignore_errors=True)
+    shutil.rmtree(app_store_dir / "iphone-6.5-1284x2778", ignore_errors=True)
+
+    ios_preview_dir = app_store_dir / "app-preview-886x1920"
+    ios_63_dir = app_store_dir / "iphone-6.3-1206x2622"
+    ios_61_dir = app_store_dir / "iphone-6.1-1179x2556"
     gp_dir = OUT_DIR / "google-play"
     gp_phone_dir = gp_dir / "phone-1080x1920"
 
-    for d in (app_store_dir, ios_69_dir, ios_65_dir, gp_dir, gp_phone_dir, SOURCE_PHOTOS_OUT):
+    for d in (app_store_dir, ios_preview_dir, ios_63_dir, ios_61_dir, gp_dir, gp_phone_dir, SOURCE_PHOTOS_OUT):
         d.mkdir(parents=True, exist_ok=True)
 
     # Load brand icon and raw parking garage photographs
@@ -1062,20 +1814,31 @@ def main() -> None:
         ),
     ]
 
-    for filename, eyebrow, headline, subtitle, accent, renderer in slides:
-        # iOS 6.9" (1320 x 2868)
-        ios_69 = frame_device_on_poster(1320, 2868, "ios", eyebrow, headline, subtitle, renderer, accent=accent)
-        ios_69.save(ios_69_dir / filename, format="PNG", optimize=True)
+    if "--preview-only" not in sys.argv:
+        for filename, eyebrow, headline, subtitle, accent, renderer in slides:
+            # iOS 6.3" Display (1206 x 2622)
+            ios_63 = frame_device_on_poster(1206, 2622, "ios", eyebrow, headline, subtitle, renderer, accent=accent)
+            ios_63.save(ios_63_dir / filename, format="PNG", optimize=True)
 
-        # iOS 6.5" (1284 x 2778)
-        ios_65 = frame_device_on_poster(1284, 2778, "ios", eyebrow, headline, subtitle, renderer, accent=accent)
-        ios_65.save(ios_65_dir / filename, format="PNG", optimize=True)
+            # iOS 6.1" Display (1179 x 2556)
+            ios_61 = frame_device_on_poster(1179, 2556, "ios", eyebrow, headline, subtitle, renderer, accent=accent)
+            ios_61.save(ios_61_dir / filename, format="PNG", optimize=True)
 
-        # Google Play Phone 9:16 (1080 x 1920)
-        gp_shot = frame_device_on_poster(1080, 1920, "android", eyebrow, headline, subtitle, renderer, accent=accent)
-        gp_shot.save(gp_phone_dir / filename, format="PNG", optimize=True)
+            # Google Play Phone 9:16 (1080 x 1920)
+            gp_shot = frame_device_on_poster(1080, 1920, "android", eyebrow, headline, subtitle, renderer, accent=accent)
+            gp_shot.save(gp_phone_dir / filename, format="PNG", optimize=True)
 
-        print(f"Generated {filename} across iOS 6.9\", iOS 6.5\", and Android 9:16")
+            print(f"Generated {filename} across iOS 6.3\" (1206x2622), iOS 6.1\" (1179x2556), and Android 9:16")
+
+    # 5. iOS App Preview Videos — 3 x (886 x 1920, 18s, 30fps, H.264 + 256kbps Stereo AAC)
+    generate_all_app_previews(
+        ios_preview_dir,
+        app_icon=icon_master.convert("RGBA"),
+        photo_b2=photo_b2,
+        photo_p4=photo_p4,
+        photo_torch=photo_torch,
+        photo_lot_a=photo_lot_a,
+    )
 
     print("All App Store and Google Play visual assets generated successfully!")
 
