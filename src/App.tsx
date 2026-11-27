@@ -17,6 +17,7 @@ import * as Haptics from 'expo-haptics';
 import { Observe, ObserveRoot, useObserve } from 'expo-observe';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { CameraPreview } from './components/CameraPreview';
 import { PhotoViewer } from './components/PhotoViewer';
 import { useMinuteClock } from './hooks/useMinuteClock';
 import { useSoftShutterSound } from './hooks/useSoftShutterSound';
@@ -159,13 +160,7 @@ function MainScreen() {
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
       {/* Top half: camera */}
       <View style={styles.pane}>
-        <CameraView
-          ref={cameraRef}
-          style={StyleSheet.absoluteFill}
-          facing="back"
-          enableTorch={torch}
-          onCameraReady={() => setReady(true)}
-        />
+        <CameraPreview ref={cameraRef} enableTorch={torch} onCameraReady={() => setReady(true)} />
         <Text style={styles.label}>CAMERA</Text>
         <Pressable
           style={[styles.torchBtn, torch && styles.torchBtnOn]}
